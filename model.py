@@ -3,23 +3,27 @@ import torch.nn as nn
 from torch.nn import functional as F
 import struct
 import numpy as np
+import torchvision
+import time
+from transformers import optimization
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter('runs/training_run')
+starttime = time.strftime("%Y-%m-%d_%H:%M:%S")
+writer = SummaryWriter(log_dir="./runs/"+starttime[:13],comment=starttime[:13],flush_secs=60)
 
 
 # 超参数设置
 # hyperparameters
-batch_size = 16 # how many independent sequences will we process in parallel?
+batch_size = 256 # how many independent sequences will we process in parallel?
 block_size = 28*28 # what is the maximum context length for predictions?
-max_iters = 5000
+max_iters = 20000
 eval_interval = 100
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
 n_embd = 256
 n_head = 4
-n_layer = 4
+n_layer = 10
 dropout = 0.0
 vocab_size=256
 # ------------
@@ -242,27 +246,45 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
+
+
+
+
+
 if __name__ == "__main__":
     # 10. 模型实例化
     model = BigramLanguageModel()
+
     m = model.to(device)
+    
+    writer.add_graph(model,input_to_model=get_batch('train'))
     # print the number of parameters in the model
     # 将其移动到设备device上。然后，我们打印出模型中的参数数量。
     print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
 
     # create a PyTorch optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    lr_scheduler = optimization.get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=100,
+        num_training_steps=max_iters,
+    )
+
     for iter in range(max_iters):
 
         # every once in a while evaluate the loss on train and val sets
+        # eval_interval = 100
         if iter % eval_interval == 0 or iter == max_iters - 1:
             losses = estimate_loss(model)
-            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, LR: {lr_scheduler.get_last_lr()[0]:.4g}")
 
             # write to tensorboard
             writer.add_scalar('Loss/train', losses['train'], iter)
             writer.add_scalar('Loss/val', losses['val'], iter)
+            writer.add_scalars(main_tag='Loss/train and val',tag_scalar_dict={"train":losses['train'],"loss":losses['val']},global_step=iter)
+            writer.add_scalar("train/lr", lr_scheduler.get_last_lr()[0], global_step=iter)
 
+            
 
         # 从训练集中采样一个批次的数据xb和yb，将它们输入到模型中，得到logits和loss。然后将优化器的梯度清零，计算损失的反向传播，更新优化器的参数。
         # 采样一个批次的数据，计算损失，清零梯度，计算反向传播，然后更新参数。这是训练神经网络模型的基本步骤。
@@ -276,6 +298,7 @@ if __name__ == "__main__":
         loss.backward()
         # 更新优化器的参数。这会根据每个参数的梯度和学习率来更新参数的值。
         optimizer.step()
+        lr_scheduler.step()
 
     torch.save(model,'./model.pth')
     writer.close()
