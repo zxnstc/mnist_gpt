@@ -8,15 +8,15 @@ import time
 from transformers import optimization
 from torch.utils.tensorboard import SummaryWriter
 
-starttime = time.strftime("%Y-%m-%d_%H:%M:%S")
-writer = SummaryWriter(log_dir="./runs/"+starttime[:13],comment=starttime[:13],flush_secs=60)
+from utils import *
+
 
 
 # 超参数设置
 # hyperparameters
-batch_size = 256 # how many independent sequences will we process in parallel?
+batch_size = 128 # how many independent sequences will we process in parallel?
 block_size = 28*28 # what is the maximum context length for predictions?
-max_iters = 20000
+max_iters = 10000
 eval_interval = 100
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -26,6 +26,7 @@ n_head = 4
 n_layer = 10
 dropout = 0.0
 vocab_size=256
+save_interval=500
 # ------------
 
 torch.manual_seed(1337)
@@ -250,8 +251,12 @@ class BigramLanguageModel(nn.Module):
 
 
 
-
 if __name__ == "__main__":
+
+    starttime = time.strftime("%Y-%m-%d_%H:%M:%S")
+    writer = SummaryWriter(log_dir="./runs/"+filename+starttime[5:16],comment=starttime[:13],flush_secs=60)
+
+
     # 10. 模型实例化
     model = BigramLanguageModel()
 
@@ -284,6 +289,11 @@ if __name__ == "__main__":
             writer.add_scalars(main_tag='Loss/train and val',tag_scalar_dict={"train":losses['train'],"loss":losses['val']},global_step=iter)
             writer.add_scalar("train/lr", lr_scheduler.get_last_lr()[0], global_step=iter)
 
+
+
+        if iter>2000 and (iter % save_interval == 0 or iter == max_iters - 1):
+            save_checkpoints(model,iter)
+
             
 
         # 从训练集中采样一个批次的数据xb和yb，将它们输入到模型中，得到logits和loss。然后将优化器的梯度清零，计算损失的反向传播，更新优化器的参数。
@@ -300,5 +310,4 @@ if __name__ == "__main__":
         optimizer.step()
         lr_scheduler.step()
 
-    torch.save(model,'./model.pth')
     writer.close()

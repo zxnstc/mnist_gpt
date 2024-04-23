@@ -3,3 +3,6 @@
 *.pth
 *.pkl
 runs/
+checkpoints/
+data/
+images/
