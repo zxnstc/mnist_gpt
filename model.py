@@ -5,18 +5,17 @@ import struct
 import numpy as np
 import torchvision
 import time
+import click
 from transformers import optimization
 from torch.utils.tensorboard import SummaryWriter
 
 from utils import *
 
-
-
 # 超参数设置
 # hyperparameters
 batch_size = 128 # how many independent sequences will we process in parallel?
 block_size = 28*28 # what is the maximum context length for predictions?
-max_iters = 10000
+max_iters = 20000
 eval_interval = 100
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -247,39 +246,12 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
-
-
-
-
-if __name__ == "__main__":
-
-    starttime = time.strftime("%Y-%m-%d_%H:%M:%S")
-    writer = SummaryWriter(log_dir="./runs/"+filename+starttime[5:16],comment=starttime[:13],flush_secs=60)
-
-
-    # 10. 模型实例化
-    model = BigramLanguageModel()
-
-    m = model.to(device)
-    
-    writer.add_graph(model,input_to_model=get_batch('train'))
-    # print the number of parameters in the model
-    # 将其移动到设备device上。然后，我们打印出模型中的参数数量。
-    print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
-
-    # create a PyTorch optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-    lr_scheduler = optimization.get_cosine_schedule_with_warmup(
-        optimizer,
-        num_warmup_steps=100,
-        num_training_steps=max_iters,
-    )
-
-    for iter in range(max_iters):
+def training(start_iter:int,max_iters:int):
+    for iter in range(start_iter,max_iters):
 
         # every once in a while evaluate the loss on train and val sets
         # eval_interval = 100
-        if iter % eval_interval == 0 or iter == max_iters - 1:
+        if iter % eval_interval == 0 or iter == max_iters-1 :
             losses = estimate_loss(model)
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, LR: {lr_scheduler.get_last_lr()[0]:.4g}")
 
@@ -291,8 +263,15 @@ if __name__ == "__main__":
 
 
 
-        if iter>2000 and (iter % save_interval == 0 or iter == max_iters - 1):
-            save_checkpoints(model,iter)
+        if iter>2000 and (iter % save_interval == 0 or iter == max_iters-1 ):
+            state = {
+                'iter': iter,
+                'model_state': model,
+                'optimizer_state': optimizer.state_dict(),
+                # 如果使用了学习率调度器，也要保存它的状态
+                'scheduler_state': lr_scheduler.state_dict() if lr_scheduler else None
+            }
+            save_checkpoints(state,iter)
 
             
 
@@ -310,4 +289,63 @@ if __name__ == "__main__":
         optimizer.step()
         lr_scheduler.step()
 
+@click.command()
+@click.option("--continue_training",type=bool,default=0)
+@click.option("--model_path",type=Path,required=False)
+@click.option("--start_iter",type=int,required=False)
+@click.option("--plus_iter",type=int,required=False,default=5000)
+def main(continue_training:bool,model_path:Path,start_iter:int,plus_iter:int):
+    global max_iters,optimizer,lr_scheduler,model,writer
+
+    starttime = time.strftime("%Y-%m-%d_%H:%M:%S")
+    writer = SummaryWriter(log_dir="./runs/"+filename+starttime[5:16],comment=starttime[:13],flush_secs=60)
+
+
+    # 10. 模型实例化
+
+
+    
+    # writer.add_graph(model,input_to_model=get_batch('train'))
+    # print the number of parameters in the model
+    # 将其移动到设备device上。然后，我们打印出模型中的参数数量。
+
+
+    # create a PyTorch optimizer
+
+
+    if continue_training==0:
+        model = BigramLanguageModel().to(device)
+        print(sum(p.numel() for p in model.parameters())/1e6, 'M parameters')
+
+        optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+        lr_scheduler = optimization.get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=100,
+        num_training_steps=max_iters,
+    )
+        
+        start_iter=0
+        training(start_iter,max_iters)
+
+    else:
+        state_dict=torch.load(model_path)
+        model=torch.load(state_dict['model_state'])
+        model=model.to(device)
+        print(sum(p.numel() for p in model.parameters())/1e6, 'M parameters')
+        optimizer.load_state_dict(state_dict['optimizer_state'])
+        if 'scheduler_state' in state_dict:
+            scheduler.load_state_dict(state_dict['scheduler_state'])
+        max_iters=start_iter+plus_iter
+        training(start_iter,max_iters)
+
+
+
     writer.close()
+
+
+if __name__ == "__main__":
+
+
+    main()
+
+   

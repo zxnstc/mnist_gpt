@@ -25,7 +25,7 @@ filename=get_file_name()
 def get_exp_id() -> str:
     return f"{filename}/{starttime[5:16]}"
 
-def save_checkpoints(model,iter:int):
+def save_checkpoints(state:dict,iter:int):
     exp_id=get_exp_id()
     parent_path=Path("/data/mnist_gpt/checkpoints/")
     ckp_dir=parent_path/exp_id
@@ -34,7 +34,7 @@ def save_checkpoints(model,iter:int):
 
     logger.info("[checkpoint] Saving checkpoint")
 
-    torch.save(model,ckp_dir/f"{iter:05d}.pt")
+    torch.save(state,ckp_dir/f"{iter:05d}.pt")
     logger.info(f"Checkpoint saved to {ckp_dir}")
     return ckp_dir
 
