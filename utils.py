@@ -34,7 +34,7 @@ def save_checkpoints(state:dict,iter:int):
 
     logger.info("[checkpoint] Saving checkpoint")
 
-    torch.save(state,ckp_dir/f"{iter:05d}.pt")
+    torch.save(state,ckp_dir/f"{iter:05d}.pth")
     logger.info(f"Checkpoint saved to {ckp_dir}")
     return ckp_dir
 

@@ -34,16 +34,14 @@ def load_model(model_path:Path):
 
 
 def get_sample(num:int):
-    all_sample = torch.tensor(images, dtype=torch.long)
-    sample=all_sample[-num:]
-    # 切片之后的sample
-    half_sample = sample[:, :392]
-    half_sample=half_sample.to(device)
+    BOT_tensor = torch.full((num, 1), 256)
 
-    return half_sample
+    BOT_tensor=BOT_tensor.to(device)
+    
+    return BOT_tensor
 
 def save_images(result_tensor,num:int,model_path:Path):
-    result_reshape=result_tensor.view(-1,28,28)
+    result_reshape=result_tensor[:,1:].view(-1,28,28)
 
     # 创建一个网格以显示多个图像
     fig, axes = plt.subplots(nrows=int(num/5), ncols=5, figsize=(10, 5))
@@ -67,10 +65,12 @@ def save_images(result_tensor,num:int,model_path:Path):
 def main(model_path:Path,num:int):
     model=load_model(model_path)
 
-    half_sample=get_sample(num)
+    BOT_sample=get_sample(num)
+    # BOT_sample(num,1)
 
     logger.info("generating中")
-    result_tensor=model.generate(half_sample,max_new_tokens=392)
+    result_tensor=model.generate(BOT_sample,max_new_tokens=784)
+    print(result_tensor.shape)
     save_images(result_tensor,num,model_path)
 
 

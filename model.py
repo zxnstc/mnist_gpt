@@ -14,7 +14,7 @@ from utils import *
 # 超参数设置
 # hyperparameters
 batch_size = 128 # how many independent sequences will we process in parallel?
-block_size = 28*28 # what is the maximum context length for predictions?
+block_size = 1000 # what is the maximum context length for predictions?
 max_iters = 20000
 eval_interval = 100
 learning_rate = 1e-3
@@ -22,9 +22,10 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
 n_embd = 256
 n_head = 4
-n_layer = 10
+n_layer = 12
 dropout = 0.0
-vocab_size=256
+# 增加一个special token 开始符号
+vocab_size=256+1
 save_interval=500
 # ------------
 
@@ -46,15 +47,25 @@ images = load_mnist_image('/data/notebook/mnist_gpt/MNIST/raw/train-images-idx3-
 # images (60000, 784)-->tensor (60000, 784)
 # train_data:torch.Size([54000, 784])
 data = torch.tensor(images, dtype=torch.long)
+
+special_token_tensor = torch.full((60000, 1), 256)  # fill with 256
+
+# 横向拼接
+data = torch.cat((special_token_tensor, data), dim=1)
+
+
+
 data=torch.reshape(data,(-1,))
+
 # print(data.shape)
 # torch.Size([47040000])
 n = int(0.9*len(data)) # first 90% will be train, rest val 
 # n=5400
 train_data = data[:n]
-val_data = data[n:-100]
+val_data = data[n:]
 # print(train_data.shape)
 # torch.Size([42336000])
+
 
 
 
@@ -65,7 +76,7 @@ def get_batch(split:str)-> torch.Tensor([batch_size,block_size]):
     data = train_data if split == 'train' else val_data
     # 生成一个长度为batch_size的一维张量，张量中的每个元素都是一个随机整数，这个整数的范围是0到len(data) - block_size。这些随机整数将被用作从数据中提取序列的起始索引。
     # ix = torch.randint(len(data) - block_size, (batch_size,))
-    ix = torch.randint(len(data) // 784-1, (batch_size,)) * 784
+    ix = torch.randint(len(data) // block_size-1, (batch_size,)) * block_size
     # print("ix:",ix)
     x = torch.stack([data[i:i+block_size] for i in ix])          
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
@@ -266,7 +277,7 @@ def training(start_iter:int,max_iters:int):
         if iter>2000 and (iter % save_interval == 0 or iter == max_iters-1 ):
             state = {
                 'iter': iter,
-                'model_state': model,
+                'model_state': model.state_dict(),
                 'optimizer_state': optimizer.state_dict(),
                 # 如果使用了学习率调度器，也要保存它的状态
                 'scheduler_state': lr_scheduler.state_dict() if lr_scheduler else None
