@@ -44,7 +44,7 @@ def save_images(result_tensor,num:int,model_path:Path):
     result_reshape=result_tensor[:,1:].view(-1,28,28)
 
     # 创建一个网格以显示多个图像
-    fig, axes = plt.subplots(nrows=int(num/5), ncols=5, figsize=(10, 5))
+    fig, axes = plt.subplots(nrows=int(num/10), ncols=10, figsize=(10, 10))
 
     # 将张量数据转化为numpy后显示
     for i, ax in enumerate(axes.flatten()):
@@ -61,16 +61,18 @@ def save_images(result_tensor,num:int,model_path:Path):
 
 @click.command()
 @click.option("--model_path",type=Path)
-@click.option("--num",type=int,default=10)
-def main(model_path:Path,num:int):
+@click.option("--num",type=int,default=100)
+@click.option("--tem",type=float,default=1.0)
+@click.option("--topk",type=int,default=None)
+def main(model_path:Path,num:int,tem:float,topk:int):
     model=load_model(model_path)
 
     BOT_sample=get_sample(num)
     # BOT_sample(num,1)
 
     logger.info("generating中")
-    result_tensor=model.generate(BOT_sample,max_new_tokens=784)
-    print(result_tensor.shape)
+    result_tensor=model.generate(BOT_sample,max_new_tokens=784,temperature=tem,top_k=topk)
+    # print(result_tensor.shape)
     save_images(result_tensor,num,model_path)
 
 

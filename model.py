@@ -22,7 +22,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
 n_embd = 256
 n_head = 4
-n_layer = 12
+n_layer = 10
 dropout = 0.0
 # 增加一个special token 开始符号
 vocab_size=256+1
@@ -245,13 +245,16 @@ class BigramLanguageModel(nn.Module):
 
     # 将当前的索引裁剪到最后的block_size个令牌，获取预测的logits，
     # 只关注最后一个时间步，应用softmax得到概率，从分布中采样，将采样的索引添加到运行的序列中。
-    def generate(self,idx,max_new_tokens):
+    def generate(self,idx,max_new_tokens,temperature=1.0,top_k=None):
         # idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
             idx_cond=idx[:,-block_size:]
             logits,loss=self(idx_cond)
-            logits=logits[:,-1,:]
+            logits=logits[:,-1,:]/temperature
+            if top_k is not None:
+                v,_=torch.topk(logits,min(top_k,logits.size(-1)))
+                logits[logits<v[:,[-1]]]=-float('Inf')
             probs=F.softmax(logits,dim=-1)
             idx_next=torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
